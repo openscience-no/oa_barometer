@@ -14,13 +14,11 @@ website:
       - href: index.qmd
         text: "OA Barometer"
   page-footer:
-    left:
-      - icon: "images/Sikt-Secondarylogo-NB-light.png"
-        href: "https://www.sikt.no"
     border: true
     background: "#424242"
+    left: |
+      [![](/images/Sikt-Secondarylogo-NB-light.png){fig-alt="Sikt" width=170px}](https://sikt.no)
   open-graph: true
-
 format:
   html:
     theme: yeti
