@@ -1,0 +1,790 @@
+---
+execute: 
+  echo: false
+  warning: false
+format: 
+  html: 
+    page_layout: custom
+    grid: 
+      body-width: 1100px
+---
+
+
+```{r setup}
+#| echo: false
+#| warning: false
+
+library(tidyverse)
+
+
+
+
+
+#//  setup - folders
+
+# SharePoint - local folder path
+shp_folder_local = "~/../../Sikt/LOA - Dokumenter"
+
+# SharePoint - LOA main data folder
+data_folder_loa = paste0(shp_folder_local, "/analyse/data_main")
+
+# SharePoint - ABM folder
+#data_folder_abm = paste0(shp_folder_local, "/analyse/data_main")
+
+
+
+# OneDrive folder path - local
+ond_folder_local = "~/../../OneDrive - Sikt"
+
+# local user data folder
+data_folder_user = paste0(ond_folder_local, "/data/analysis_projects/data_source_files")
+
+# local user main code projects folder
+code_folder_user = paste0(ond_folder_local, "/data/a_draft_folder_structure")
+
+# cleanup
+rm(
+  shp_folder_local,
+  ond_folder_local
+)
+
+
+
+
+#//  setup - parameters
+
+# year range
+year_first = 2013
+year_last = 2022 #lubridate::today() %>% lubridate::year() %>% as.double()
+#year_last = year_last - 1
+
+
+# oa factors
+oa_ordered_levels_seven = c(
+      diamond_oa = "diamant",
+      gold_oa = "gull", 
+      hybrid_oa = "hybrid", 
+      hybrid_deal_oa = "hybrid_avtale", 
+      green_oa = "grønn", 
+      deposited_oa = "deponert", 
+      closed_oa = "lukket"
+    )
+
+
+# oa colours
+oa_color_vector = c(
+      diamant = "cyan3", #"purple4"
+      gull = "gold",
+      hybrid = "gold3",
+      #hybrid_avtale = "gold4",
+      hybrid_avtale = "darkgoldenrod",
+      grønn = "mediumseagreen",
+      deponert = "grey57",
+      lukket = "grey70"
+    )
+
+
+# set variables for plot font sizes (for easier changes)
+plot_title_font_size = 18 #20
+plot_subtitle_font_size = 14 #16
+plot_legend_font_size = 12 #12
+plot_axis_font_size = 14 #14
+
+
+
+
+#//  data - load and wrangle
+
+# load main df
+df_oa = list.files(paste0(data_folder_loa, "/cris"), full.names = TRUE) %>% 
+  as_tibble() %>% 
+  filter(
+    str_detect(value, "df_cri_oa_gz_")
+  ) %>% 
+  arrange(desc(value)) %>% 
+  pull(value) %>% 
+  
+  # use 2 for second to last version, 3 for.. etc..
+  .[1] %>% 
+
+  readr::read_rds() %>% 
+  
+  #readr::read_rds(duct_sci_path) %>% 
+  
+  #///////////////////////#
+  #// !!! IMPORTANT !!! //#
+  #///////////////////////#
+  # remove author data
+  select(
+    !starts_with("cri_auth")
+  ) 
+
+
+# prep data
+df_oa = df_oa %>% 
+  filter(
+    cri_category_type == "Artikkel",
+    cri_year_reported %in% (year_first:year_last),
+    cri_inst_id != 0,
+    cri_nvi_subset == TRUE,  #!! OR: cri_country == "Norge", 
+  ) %>%
+  
+  # fix oa status standard types
+    mutate(
+      
+      # assemble diamond
+      calculated_oa_status = str_replace(calculated_oa_status, "diamond", oa_ordered_levels_seven["diamond_oa"]),
+      
+      # assemble gold
+      calculated_oa_status = str_replace(calculated_oa_status, "gold_deal", oa_ordered_levels_seven["gold_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "gold", oa_ordered_levels_seven["gold_oa"]),
+      
+      # assemble hybrid
+      calculated_oa_status = str_replace(calculated_oa_status, "hybrid_deal", oa_ordered_levels_seven["hybrid_deal_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "hybrid", oa_ordered_levels_seven["hybrid_oa"]),
+      
+      # assemble green
+      calculated_oa_status = str_replace(calculated_oa_status, "preprint_available", oa_ordered_levels_seven["green_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "preprint_available_no", oa_ordered_levels_seven["green_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "green_no", oa_ordered_levels_seven["green_oa"]), 
+      calculated_oa_status = str_replace(calculated_oa_status, "green", oa_ordered_levels_seven["green_oa"]), 
+      
+      # assemble deposited
+      calculated_oa_status = str_replace(calculated_oa_status, "deposited", oa_ordered_levels_seven["deposited_oa"]),
+      
+      # assemble closed
+      calculated_oa_status = str_replace(calculated_oa_status, "bronze_available", oa_ordered_levels_seven["closed_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "unknown", oa_ordered_levels_seven["closed_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "anomalies", oa_ordered_levels_seven["closed_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "NA", oa_ordered_levels_seven["closed_oa"]),
+      calculated_oa_status = str_replace(calculated_oa_status, "closed", oa_ordered_levels_seven["closed_oa"]),
+      calculated_oa_status = replace_na(calculated_oa_status, oa_ordered_levels_seven["closed_oa"]),
+      
+      
+      # set factor levels, for plots
+      calculated_oa_status = factor(calculated_oa_status, levels = oa_ordered_levels_seven),
+  ) %>% 
+  arrange(calculated_oa_status) %>% 
+  distinct() 
+
+
+
+
+#//  national level
+
+# # shared - national level data
+# df_oa_shared_national = df_oa %>% 
+#     select(
+#         cri_id,
+#         calculated_oa_status,
+#         cri_year,
+#         cri_year_reported,
+#         cri_inst_id,
+#         cri_inst_name_all,
+#         cri_inst_name_eng,
+#         cri_sector,
+#         cri_npi_area,
+#         cri_npi_field,
+#     ) %>% 
+#   rename(
+#         year = cri_year_reported,
+#     ) %>% 
+#   # summarise for plot
+#     group_by(
+#         year,
+#         calculated_oa_status,
+#         #cri_sector,
+#         #cri_inst_name_all
+#     ) %>% 
+#     summarise(total = n_distinct(cri_id)) %>% 
+#     
+#     distinct() %>% 
+#   crosstalk::SharedData$new(group = "oa_data")
+# 
+# 
+# 
+# # shared - institution level data
+# df_oa_shared_inst = df_oa %>% 
+#     select(
+#         cri_id,
+#         calculated_oa_status,
+#         cri_year,
+#         cri_year_reported,
+#         cri_inst_id,
+#         cri_inst_name_all,
+#         cri_inst_name_eng,
+#         cri_sector,
+#         cri_npi_area,
+#         cri_npi_field,
+#     ) %>% 
+#   rename(
+#         year = cri_year_reported,
+#     ) %>% 
+#     distinct(cri_id, .keep_all = TRUE) %>% 
+#   # summarise for plot
+#     group_by(
+#         year,
+#         calculated_oa_status,
+#         #cri_sector,
+#         cri_inst_name_all
+#     ) %>% 
+#     summarise(total = n_distinct(cri_id)) %>% 
+#     
+#   crosstalk::SharedData$new(group = "oa_data")
+
+
+
+
+# oa status wide format
+df_oa_shared_wide_national = df_oa %>% 
+    select(
+        cri_id,
+        calculated_oa_status,
+        cri_year,
+        cri_year_reported,
+        cri_inst_id,
+        cri_inst_name_all,
+        cri_inst_name_eng,
+        cri_sector,
+        cri_npi_area,
+        cri_npi_field,
+    ) %>% 
+    rename(
+        year = cri_year_reported,
+    ) %>% 
+    # summarise for plot
+    group_by(
+        year,
+        calculated_oa_status,
+        #cri_sector,
+        #cri_inst_name_all
+    ) %>% 
+    summarise(total = n_distinct(cri_id)) %>% 
+    distinct() %>% 
+    filter(!is.na(calculated_oa_status)) %>% 
+    pivot_wider(
+        names_from = calculated_oa_status,
+        values_from = total
+    ) %>% 
+    mutate(
+        total = sum(diamant, gull, hybrid, hybrid_avtale, grønn, deponert, lukket, na.rm = TRUE),
+    ) %>% 
+    select(
+        year,
+        diamant,
+        gull,
+        hybrid,
+        hybrid_avtale,
+        grønn,
+        deponert,
+        lukket,
+        total
+    ) %>% 
+    
+  crosstalk::SharedData$new(group = "oa_national")
+
+
+
+
+#// institution level
+
+# oa status wide format
+df_oa_shared_wide_inst = df_oa %>% 
+    select(
+        cri_id,
+        calculated_oa_status,
+        cri_year,
+        cri_year_reported,
+        cri_inst_id,
+        cri_inst_name_all,
+        cri_inst_name_eng,
+        cri_sector,
+        cri_npi_area,
+        cri_npi_field,
+    ) %>% 
+    rename(
+        year = cri_year_reported,
+    ) %>% 
+    # summarise for plot
+    group_by(
+        year,
+        calculated_oa_status,
+        #cri_sector,
+        cri_inst_name_all
+    ) %>% 
+    summarise(total = n_distinct(cri_id)) %>% 
+    distinct() %>% 
+    filter(!is.na(calculated_oa_status)) %>% 
+    pivot_wider(
+        names_from = calculated_oa_status,
+        values_from = total
+    ) %>% 
+    mutate(
+        total = sum(diamant, gull, hybrid, hybrid_avtale, grønn, deponert, lukket, na.rm = TRUE),
+    ) %>% 
+    select(
+        cri_inst_name_all,
+        year,
+        diamant,
+        gull,
+        hybrid,
+        hybrid_avtale,
+        grønn,
+        deponert,
+        lukket,
+        total
+    ) %>% 
+    arrange(
+        cri_inst_name_all,
+        year
+    ) %>% 
+    
+  crosstalk::SharedData$new(group = "oa_inst")
+
+
+
+#//  data - test plot 01
+
+# pct - standard plot
+# plot_pct = df_oa_shared %>% 
+#     
+#     # summarise for plot
+#     group_by(
+#         year,
+#         calculated_oa_status
+#     ) %>% 
+#     summarise(total = n_distinct(cri_id)) %>% 
+#     
+#     # calculate pct
+#     group_by(
+#         year
+#     ) %>% 
+#     mutate(
+#         total_year = sum(total),
+#         pct = round(total / total_year * 100, digits = 2)
+#     ) %>% 
+#     
+#     ggplot(aes(x = year, y = total, fill = calculated_oa_status, label = total)) +
+#     geom_bar(
+#         aes(y = pct),
+#         position = position_stack(reverse = TRUE),
+#         stat="identity"
+#     ) +
+#     
+#     #oa_color_map_five_rev + 
+#     scale_fill_manual(
+#         values = oa_color_vector
+#     ) +
+#     
+#     
+#     # bbc style plots
+#     scale_x_continuous(breaks = seq(2013, 2022, 1)) + #min(df$year), max(df$year), 1)) + #2013, 2020, 1)) +
+#     #bbplot::bbc_style() +
+#     
+#     scale_y_continuous(labels = ~ scales::percent(.x, scale = 1, accuracy = 1)) + 
+#     
+#     geom_hline(yintercept = 0, size = 1) + 
+#     theme(
+#         legend.position = "top",
+#         legend.justification = "left",
+#         plot.title = element_text(size = plot_title_font_size),
+#         plot.subtitle = element_text(size = plot_subtitle_font_size),
+#         legend.text = element_text(size = plot_legend_font_size),
+#         axis.text = element_text(size = plot_axis_font_size), 
+#         axis.text.x = element_text(margin = margin(1, b = 10))
+#     ) +
+#     
+#     labs(
+#         #x = plot_x, 
+#         #y = plot_y,
+#         title = "test plot", #{{ title }},
+#         subtitle = "subtitle", #{{ subtitle }},
+#         #fill= "Type:"
+#     ) +
+#     
+#     geom_label(aes(
+#         y = pct,
+#         label = pct 
+#     ),
+#     position = position_stack(vjust = 0.5, reverse = TRUE), 
+#     label.padding = unit(0.1, "lines"),
+#     stat = "identity", 
+#     size = 3,
+#     show.legend = FALSE
+#     )
+# 
+# 
+# # plotly
+# plotly::ggplotly(plot_pct)
+
+
+```
+
+
+::: {.panel-tabset}
+
+## National Level
+
+
+```{r national-abs-selectors}
+#| echo: false
+#| panel: sidebar
+
+
+#//  data - test plot 02
+
+# crosstalk selectors
+crosstalk::filter_slider(
+      id = "slider_year", 
+      width = "250px",
+      label = "år",
+      sep = NULL,
+      round = TRUE,
+      #ticks = FALSE,
+      sharedData = df_oa_shared_wide_national, #df_oa_shared_national,
+      column = ~year
+    )
+
+```
+
+
+
+```{r national-abs-plot}
+#| echo: false
+#| panel: fill
+
+
+#//  data - test plot 02
+
+
+# plotly - wide data
+plotly_national_abs = df_oa_shared_wide_national %>% 
+    
+    plotly::plot_ly(
+        x = ~year,
+        y = ~diamant,
+        name = "diamant",
+        type = "bar",
+        #text = ~total,
+        #textposition = "auto",
+        #marker = list(color = oa_color_vector),
+        #color = ~calculated_oa_status,
+        #marker = list(
+            color = I("cyan3") #oa_color_vector$diamant
+        #)
+        #name = ~calculated_oa_status
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~gull,
+        name = "gull",
+        #marker = list(
+            color = I("gold") #oa_color_vector$gull
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~hybrid,
+        name = "hybrid",
+        #marker = list(
+            color = I("gold3") #oa_color_vector$hybrid
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~hybrid_avtale,
+        name = "hybrid_avtale",
+        #marker = list(
+            color = I("darkgoldenrod") #oa_color_vector$hybrid_avtale
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~grønn,
+        name = "grønn",
+        #marker = list(
+            color = I("mediumseagreen") #oa_color_vector$grønn
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~deponert,
+        name = "deponert",
+        #marker = list(
+            color = I("grey57") #oa_color_vector$deponert
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~lukket,
+        name = "lukket",
+        #marker = list(
+            color = I("grey70") #oa_color_vector$lukket
+        #)
+    ) %>% 
+    
+    plotly::layout(
+        xaxis = list(
+            type = "category",
+            title = ""
+        ),
+        yaxis = list(
+            title = ""
+        ),
+        barmode = "stack"
+    )
+
+
+# # plotly - long data
+# plotly_national_abs = df_oa_shared_national %>% 
+#   
+#   #distinct(cri_id, .keep_all = TRUE) %>% 
+#   
+#   plotly::plot_ly(
+#         x = ~year,
+#         y = ~total, #pct,
+#         type = "bar",
+#         #text = ~total,
+#         #textposition = "auto",
+#         #marker = list(color = oa_color_vector),
+#         color = ~calculated_oa_status,
+#         colors = oa_color_vector
+#         #name = ~calculated_oa_status
+#     ) %>% 
+#     plotly::layout(
+#       xaxis = list(
+#         type = "category",
+#         title = ""
+#       ),
+#       yaxis = list(
+#         title = ""
+#       ),
+#         barmode = "stack"
+#     )
+
+
+# display
+plotly_national_abs
+
+
+# # crosstalk selectors
+# crosstalk::bscols(
+#   widths = c(3, 8),
+#   list(
+#     crosstalk::filter_slider(
+#       id = "slider_year", 
+#       label = "Year",
+#       sep = NULL,
+#       round = TRUE,
+#       #ticks = FALSE,
+#       sharedData = df_oa_shared_national,
+#       column = ~year #cri_year_reported
+#     )#,
+#     # crosstalk::filter_checkbox(
+#     #   id = "sector",
+#     #   label = "Sector",
+#     #   sharedData = df_oa_shared_long,
+#     #   group = ~cri_sector
+#     # ),
+#     # crosstalk::filter_select(
+#     #   id = "inst",
+#     #   label = "Institution",
+#     #   sharedData = df_oa_shared_long,
+#     #   group = ~cri_inst_name_all
+#     # )
+#   ),
+#   plotly_national_abs
+# )
+
+```
+
+
+<br><br>  
+  
+
+
+```{r national-abs-table}
+
+df_oa_shared_wide_national %>% 
+  
+  DT::datatable(
+    colnames = c('år' = "year"),
+    options = list(
+      dom = "t"
+    ),
+    #extensions = "Responsive",
+    selection = "none",
+    class = "table table-condensed table-striped",
+    rownames = FALSE
+  )
+
+
+```
+
+
+
+## Institution Level
+
+```{r inst-abs-selectors01}
+#| echo: false
+#| panel: sidebar
+
+
+#//  data - test plot 02
+
+# crosstalk selectors
+#crosstalk::bscols(
+  #widths = c(3, 8),
+  #list(
+    crosstalk::filter_slider(
+      id = "slider_year", 
+      width = "250px",
+      label = "år",
+      sep = NULL,
+      round = TRUE,
+      #ticks = FALSE,
+      sharedData = df_oa_shared_wide_inst, #df_oa_shared_national,
+      column = ~year
+    )#,
+    #crosstalk::filter_select(
+    #  id = "inst",
+    #  label = "institusjon",
+    #  sharedData = df_oa_shared_wide_inst,
+    #  group = ~cri_inst_name_all
+    #)
+  #)
+#)
+
+crosstalk::filter_select(
+  id = "inst",
+  label = "institusjon",
+  sharedData = df_oa_shared_wide_inst,
+  group = ~cri_inst_name_all
+)
+
+
+```
+
+
+
+```{r inst-abs-plot}
+#| echo: false
+#| panel: fill
+
+
+#//  data - test plot 02
+
+
+# plotly - wide data
+plotly_inst_abs = df_oa_shared_wide_inst %>% 
+    
+    plotly::plot_ly(
+        x = ~year,
+        y = ~diamant,
+        name = "diamant",
+        type = "bar",
+        #text = ~total,
+        #textposition = "auto",
+        #marker = list(color = oa_color_vector),
+        #color = ~calculated_oa_status,
+        #marker = list(
+            color = I("cyan3") #oa_color_vector$diamant
+        #)
+        #name = ~calculated_oa_status
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~gull,
+        name = "gull",
+        #marker = list(
+            color = I("gold") #oa_color_vector$gull
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~hybrid,
+        name = "hybrid",
+        #marker = list(
+            color = I("gold3") #oa_color_vector$hybrid
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~hybrid_avtale,
+        name = "hybrid_avtale",
+        #marker = list(
+            color = I("darkgoldenrod") #oa_color_vector$hybrid_avtale
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~grønn,
+        name = "grønn",
+        #marker = list(
+            color = I("mediumseagreen") #oa_color_vector$grønn
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~deponert,
+        name = "deponert",
+        #marker = list(
+            color = I("grey57") #oa_color_vector$deponert
+        #)
+    ) %>% 
+    
+    plotly::add_trace(
+        y = ~lukket,
+        name = "lukket",
+        #marker = list(
+            color = I("grey70") #oa_color_vector$lukket
+        #)
+    ) %>% 
+    
+    plotly::layout(
+        xaxis = list(
+            type = "category",
+            title = ""
+        ),
+        yaxis = list(
+            title = ""
+        ),
+        barmode = "stack"
+    )
+
+
+
+# display
+plotly_inst_abs
+
+
+```
+
+
+<br><br>  
+  
+
+
+```{r inst-abs-table}
+
+df_oa_shared_wide_inst %>% 
+  
+  DT::datatable(
+    colnames = c(
+      "institusjon" = "cri_inst_name_all",
+      'år' = "year"
+      ),
+    #extensions = "Responsive",
+    selection = "none",
+    class = "table table-condensed table-striped",
+    options = list(
+      dom = "t"
+    ),
+    rownames = FALSE
+  )
+
+
+```
+
+
+:::
