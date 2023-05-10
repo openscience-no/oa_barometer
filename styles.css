@@ -1,1 +1,26 @@
 /* css styles */
+
+.import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;700&display=swap');
+
+.nav-link{
+    font-family: 'Barlow', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    color: #FFF;
+
+}
+
+.navbar-brand {
+  max-width: 300px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.navbar-brand > img {
+  width: 100%;
+  height: 100%;
+}
+
+.navbar-logo {
+  max-height: 55px;
+}

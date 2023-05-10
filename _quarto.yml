@@ -7,9 +7,10 @@ website:
   favicon: "images/open_science_icon.png"
   navbar:
     background: "#424242"
-    logo: "images/openscience_logo_hvit_stacked_wide.png"
-    logo-href: "https://www.openscience.no"
+    foreground: "#FFFF"
     title: false
+    logo: "/images/open_science_title_logo_02.png"
+    logo-href: "https://openscience.no"
     left:
       - href: index.qmd
         text: "OA Barometer"
@@ -21,7 +22,7 @@ website:
   open-graph: true
 format:
   html:
-    theme: yeti
+    theme: cosmo
     css: styles.css
     toc: false
 editor: visual
