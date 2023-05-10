@@ -319,9 +319,12 @@ df_oa_shared_wide_inst = df_oa %>%
         names_from = calculated_oa_status,
         values_from = total
     ) %>% 
+    ungroup() %>%
+    rowwise() %>% 
     mutate(
         total = sum(diamant, gull, hybrid, hybrid_avtale, grønn, deponert, lukket, na.rm = TRUE),
     ) %>% 
+    ungroup() %>% 
     select(
         cri_inst_name_all,
         year,
